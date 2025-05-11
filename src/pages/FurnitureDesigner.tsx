@@ -11,22 +11,14 @@ import SaveDesignDialog from "@/components/SaveDesignDialog";
 import ShareDesignDialog from "@/components/ShareDesignDialog";
 import { Button } from "@/components/ui/button";
 import { Save, Share2 } from "lucide-react";
+import { FurnitureDesignBrief, BuildPlan, ComponentModel, MaterialModel, CutListItem } from "../types/design";
+import { generatePlanFromBrief } from "../../services/aiPlannerService";
 
 interface Message {
   id: string;
   content: string;
   sender: "user" | "ai";
   timestamp: Date;
-}
-
-interface FurnitureDesign {
-  id: string;
-  name: string;
-  modelType: "table" | "chair" | "desk" | "bookshelf" | "box" | "custom";
-  materials: string[];
-  dimensions: Record<string, number>;
-  style: string;
-  joineryMethods: string[];
 }
 
 const FurnitureDesigner = () => {
@@ -41,18 +33,38 @@ const FurnitureDesigner = () => {
     },
   ]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [currentDesign, setCurrentDesign] = useState<FurnitureDesign>({
-    id: "1",
-    name: "Dining Table",
-    modelType: "table",
-    materials: ["Maple"],
-    dimensions: { length: 60, width: 30, height: 29 },
-    style: "Modern",
-    joineryMethods: ["Mortise and Tenon"],
+  const [designBrief, setDesignBrief] = useState<FurnitureDesignBrief>({
+    description: "A standard piece of furniture.",
+    targetDimensions: { units: "in" },
   });
+  const [currentBuildPlan, setCurrentBuildPlan] = useState<BuildPlan | null>(null);
+
+  useEffect(() => {
+    if (designBrief.description !== "A standard piece of furniture." && !isProcessing) {
+      const fetchPlan = async () => {
+        console.log("FurnitureDesigner: Design Brief updated, attempting to generate BuildPlan:", designBrief);
+        setIsProcessing(true);
+        try {
+          const plan = await generatePlanFromBrief(designBrief);
+          if (plan) {
+            console.log("FurnitureDesigner: Successfully received and validated plan:", plan);
+            setCurrentBuildPlan(plan);
+          } else {
+            console.error("FurnitureDesigner: Failed to generate or validate build plan.");
+            alert("Error: Could not generate the build plan. Please try again or modify your brief.");
+          }
+        } catch (error) {
+          console.error("FurnitureDesigner: Error calling generatePlanFromBrief:", error);
+          alert("An unexpected error occurred while generating the plan.");
+        }
+        setIsProcessing(false);
+      };
+
+      fetchPlan();
+    }
+  }, [designBrief, isProcessing]);
 
   const handleSendMessage = (message: string) => {
-    // Add user message to chat
     const userMessage: Message = {
       id: Date.now().toString(),
       content: message,
@@ -61,273 +73,166 @@ const FurnitureDesigner = () => {
     };
     setMessages((prev) => [...prev, userMessage]);
 
-    // Simulate AI processing
-    setIsProcessing(true);
+    processUserMessage(message);
 
     setTimeout(() => {
-      // Process the message and update the design
-      processUserMessage(message);
-
-      // Add AI response
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        content: generateAIResponse(message),
+        content: generateAIResponse(message, designBrief),
         sender: "ai",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
-      setIsProcessing(false);
     }, 1500);
   };
 
   const processUserMessage = (message: string) => {
     const lowerMessage = message.toLowerCase();
+    let briefUpdates: Partial<FurnitureDesignBrief> = {};
+    let dimensionsChanged = false;
 
-    // Simple rule-based processing
-    if (lowerMessage.includes("walnut")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        materials: ["Walnut"],
-      }));
+    // Material parsing
+    if (lowerMessage.includes("walnut") || lowerMessage.includes("oak") || lowerMessage.includes("maple") || lowerMessage.includes("cherry")) {
+      const materials = ["walnut", "oak", "maple", "cherry"];
+      const foundMaterial = materials.find(m => lowerMessage.includes(m));
+      if (foundMaterial) {
+        briefUpdates.material = foundMaterial.charAt(0).toUpperCase() + foundMaterial.slice(1);
+      }
     }
 
-    if (lowerMessage.includes("taller") || lowerMessage.includes("height")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        dimensions: { ...prev.dimensions, height: prev.dimensions.height + 2 },
-      }));
+    // Style parsing
+    if (lowerMessage.includes("style")) {
+      const styleKeywords = ["modern", "traditional", "mid-century", "rustic", "industrial"];
+      const foundStyle = styleKeywords.find(s => lowerMessage.includes(s));
+      if (foundStyle) {
+        briefUpdates.style = foundStyle.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      }
     }
 
-    if (lowerMessage.includes("wider") || lowerMessage.includes("width")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        dimensions: { ...prev.dimensions, width: prev.dimensions.width + 4 },
-      }));
+    // Dimension parsing (heuristic)
+    const dimRegex = /(\d+\.?\d*)\s*(inches|inch|in|cm|centimeters|mm|millimeters|feet|foot|ft)/g;
+    let match;
+    const newTargetDimensions = { ...(designBrief.targetDimensions || { units: "in" }) };
+
+    while ((match = dimRegex.exec(lowerMessage)) !== null) {
+      const value = match[1];
+      const unit = match[2].toLowerCase();
+      let currentUnit = newTargetDimensions.units || "in";
+
+      if (unit.startsWith("in")) currentUnit = "in";
+      else if (unit.startsWith("cm")) currentUnit = "cm";
+      else if (unit.startsWith("mm")) currentUnit = "mm";
+      // Basic conversion for feet to inches for simplicity
+      else if (unit.startsWith("ft") || unit.startsWith("foot")) {
+        const feetValue = parseFloat(value);
+        if (!isNaN(feetValue)) {
+          // assign to a dimension keyword if found near the value
+          const dimKeywordMatch = lowerMessage.substring(0, match.index).match(/(length|width|height|depth)\s*$/);
+          const keyword = dimKeywordMatch ? dimKeywordMatch[1] : null;
+          if(keyword) (newTargetDimensions as any)[keyword] = (feetValue * 12).toString();
+          dimensionsChanged = true;
+          newTargetDimensions.units = "in"; // Standardize to inches if feet are mentioned
+          continue; // Skip assigning to generic dimension if feet directly assigned
+        }
+      }
+
+      newTargetDimensions.units = currentUnit;
+
+      // Try to associate with a dimension keyword if it precedes the number
+      const precedingText = lowerMessage.substring(0, match.index);
+      if (precedingText.match(/(length|long)/i)) newTargetDimensions.length = value; 
+      else if (precedingText.match(/(width|wide)/i)) newTargetDimensions.width = value;
+      else if (precedingText.match(/(height|tall)/i)) newTargetDimensions.height = value;
+      else if (precedingText.match(/depth/i)) newTargetDimensions.depth = value; 
+      // Basic fallback: if no keyword, try to assign to first available L/W/H based on common order
+      else if (!newTargetDimensions.length) newTargetDimensions.length = value;
+      else if (!newTargetDimensions.width) newTargetDimensions.width = value;
+      else if (!newTargetDimensions.height) newTargetDimensions.height = value;
+      dimensionsChanged = true;
+    }
+    if(dimensionsChanged) {
+      briefUpdates.targetDimensions = newTargetDimensions;
     }
 
-    if (lowerMessage.includes("longer") || lowerMessage.includes("length")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        dimensions: { ...prev.dimensions, length: prev.dimensions.length + 6 },
-      }));
+    // Update description logic
+    if (Object.keys(briefUpdates).length === 0 && message.length > 10 && !dimensionsChanged) {
+      briefUpdates.description = message; 
+    } else if (Object.keys(briefUpdates).length > 0 || dimensionsChanged) {
+      // If specific fields were updated, or dimensions changed, ensure description reflects the original message for context
+      if (!briefUpdates.description && designBrief.description !== message) {
+        briefUpdates.description = `${designBrief.description} (Processed: ${message})`;
+      }
     }
 
-    if (lowerMessage.includes("dovetail")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        joineryMethods: [...prev.joineryMethods, "Dovetail"],
-      }));
-    }
-
-    if (
-      lowerMessage.includes("mid-century") ||
-      lowerMessage.includes("midcentury")
-    ) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        style: "Mid-Century Modern",
-      }));
-    }
-
-    if (lowerMessage.includes("chair")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        modelType: "chair",
-        name: "Dining Chair",
-        dimensions: { height: 32, width: 18, depth: 20 },
-      }));
-    }
-
-    if (lowerMessage.includes("desk")) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        modelType: "desk",
-        name: "Writing Desk",
-        dimensions: { length: 48, width: 24, height: 30 },
-      }));
-    }
-
-    if (
-      lowerMessage.includes("bookshelf") ||
-      lowerMessage.includes("bookcase")
-    ) {
-      setCurrentDesign((prev) => ({
-        ...prev,
-        modelType: "bookshelf",
-        name: "Bookshelf",
-        dimensions: { height: 72, width: 36, depth: 12 },
-      }));
-    }
+    setDesignBrief((prev) => ({
+      ...prev,
+      ...briefUpdates,
+      description: briefUpdates.description || prev.description, // Keep old description if not updated
+      targetDimensions: briefUpdates.targetDimensions || prev.targetDimensions, // Persist targetDimensions
+    }));
   };
 
-  const generateAIResponse = (message: string): string => {
+  const generateAIResponse = (message: string, currentBrief: FurnitureDesignBrief): string => {
     const lowerMessage = message.toLowerCase();
 
-    if (lowerMessage.includes("walnut")) {
-      return "I've updated the material to walnut. This hardwood has a rich, dark color and excellent durability. It's a premium choice that will give your furniture a sophisticated look.";
+    if (currentBrief.material && (lowerMessage.includes(currentBrief.material.toLowerCase()) || lowerMessage.includes("material"))) {
+      return `OK! I've noted the material as ${currentBrief.material}. The AI will consider this for the build plan.`;
     }
 
-    if (lowerMessage.includes("taller") || lowerMessage.includes("height")) {
-      return `I've increased the height of your ${currentDesign.name}. The new height is ${currentDesign.dimensions.height}" which should better suit your needs.`;
+    if (currentBrief.style && (lowerMessage.includes(currentBrief.style.toLowerCase()) || lowerMessage.includes("style"))) {
+        return `Understood. The style is set to ${currentBrief.style}. This will be used in the plan generation.`;
     }
 
-    if (lowerMessage.includes("wider") || lowerMessage.includes("width")) {
-      return `I've made your ${currentDesign.name} wider. The new width is ${currentDesign.dimensions.width}". This provides more surface area while maintaining proper proportions.`;
+    if (lowerMessage.includes("tall") || lowerMessage.includes("height") ||
+        lowerMessage.includes("wide") || lowerMessage.includes("width") ||
+        lowerMessage.includes("long") || lowerMessage.includes("length") ||
+        lowerMessage.includes("deep") || lowerMessage.includes("depth")) {
+      return `I've updated the design brief with your dimension requests: "${message}". The AI will generate a detailed plan based on this.`;
+    }
+    
+    if (isProcessing) {
+        return `I've updated the design brief: "${message}". The detailed build plan is currently being generated...`;
     }
 
-    if (lowerMessage.includes("longer") || lowerMessage.includes("length")) {
-      return `I've extended the length of your ${currentDesign.name}. The new length is ${currentDesign.dimensions.length}". This gives you more functional space while preserving the design aesthetic.`;
-    }
-
-    if (lowerMessage.includes("dovetail")) {
-      return "I've added dovetail joinery to the design. Dovetail joints are not only strong but also add visual interest and craftsmanship to your furniture piece.";
-    }
-
-    if (
-      lowerMessage.includes("mid-century") ||
-      lowerMessage.includes("midcentury")
-    ) {
-      return "I've updated the style to Mid-Century Modern. This style features clean lines, gentle organic curves, and a mix of traditional and non-traditional materials. It's a timeless look that remains popular today.";
-    }
-
-    if (lowerMessage.includes("chair")) {
-      return 'I\'ve created a dining chair design for you. The chair has a height of 32", width of 18", and depth of 20". You can see the 3D model in the design tab.';
-    }
-
-    if (lowerMessage.includes("desk")) {
-      return 'I\'ve designed a writing desk for you. The desk has dimensions of 48" length, 24" width, and 30" height. It\'s a versatile piece that would work well in a home office or study.';
-    }
-
-    if (
-      lowerMessage.includes("bookshelf") ||
-      lowerMessage.includes("bookcase")
-    ) {
-      return 'I\'ve created a bookshelf design for you. The bookshelf stands 72" tall, 36" wide, and 12" deep. It provides ample storage space while maintaining a balanced appearance.';
-    }
-
-    return "I've updated your design based on your request. You can see the changes in the 3D model. Is there anything specific you'd like to modify further?";
+    return `I've updated the design brief with: "${message}". The AI will generate a plan. What else?`;
   };
 
-  // Generate components list based on current design
-  const generateComponents = () => {
-    if (currentDesign.modelType === "table") {
+  const generateComponents = (): ComponentModel[] => {
+    if (currentBuildPlan && currentBuildPlan.components.length > 0) {
+      return currentBuildPlan.components;
+    }
+    if (currentBuildPlan?.designBrief.description.toLowerCase().includes("table")) {
       return [
         {
           id: "1",
           name: "Table Top",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.length || 60,
-            width: currentDesign.dimensions.width || 30,
-            thickness: 1.5,
-          },
+          materialId: currentBuildPlan.materials[0]?.id || "defaultMatId",
+          dimensions: "L:60in W:30in T:1.5in",
           quantity: 1,
         },
         {
           id: "2",
           name: "Leg",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.height
-              ? currentDesign.dimensions.height - 1.5
-              : 28,
-            width: 2,
-            thickness: 2,
-          },
-          quantity: 4,
-        },
-        {
-          id: "3",
-          name: "Apron",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.length
-              ? currentDesign.dimensions.length - 4
-              : 56,
-            width: 4,
-            thickness: 0.75,
-          },
-          quantity: 2,
-        },
-        {
-          id: "4",
-          name: "Apron",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.width
-              ? currentDesign.dimensions.width - 4
-              : 26,
-            width: 4,
-            thickness: 0.75,
-          },
-          quantity: 2,
-        },
-      ];
-    } else if (currentDesign.modelType === "chair") {
-      return [
-        {
-          id: "1",
-          name: "Seat",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.width || 18,
-            width: currentDesign.dimensions.depth || 18,
-            thickness: 1,
-          },
-          quantity: 1,
-        },
-        {
-          id: "2",
-          name: "Back",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.width || 18,
-            width: currentDesign.dimensions.height
-              ? currentDesign.dimensions.height - 18
-              : 14,
-            thickness: 0.75,
-          },
-          quantity: 1,
-        },
-        {
-          id: "3",
-          name: "Leg",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: 18,
-            width: 1.5,
-            thickness: 1.5,
-          },
-          quantity: 4,
-        },
-      ];
-    } else {
-      // Default components for other furniture types
-      return [
-        {
-          id: "1",
-          name: "Main Panel",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: currentDesign.dimensions.length || 30,
-            width: currentDesign.dimensions.width || 20,
-            thickness: 0.75,
-          },
-          quantity: 1,
-        },
-        {
-          id: "2",
-          name: "Support",
-          material: currentDesign.materials[0] || "Maple",
-          dimensions: {
-            length: 20,
-            width: 2,
-            thickness: 2,
-          },
+          materialId: currentBuildPlan.materials[0]?.id || "defaultMatId",
+          dimensions: "L:28in W:2in T:2in",
           quantity: 4,
         },
       ];
     }
+    return [];
+  };
+  
+  const generateCutList = (): CutListItem[] => {
+    if (currentBuildPlan && currentBuildPlan.cutList.length > 0) {
+      return currentBuildPlan.cutList;
+    }
+    if (currentBuildPlan?.designBrief.description.toLowerCase().includes("table")) {
+      return [
+        { id: "cl1", componentName: "Table Top", partName: "Top Panel", quantity: 1, length: "60in", width: "30in", thickness: "1.5in", material: currentBuildPlan.materials[0]?.name || "Wood" },
+        { id: "cl2", componentName: "Leg", partName: "Leg Member", quantity: 4, length: "28in", width: "2in", thickness: "2in", material: currentBuildPlan.materials[0]?.name || "Wood" },
+      ];
+    }
+    return [];
   };
 
   return (
@@ -338,22 +243,23 @@ const FurnitureDesigner = () => {
           <SaveDesignDialog
             onSave={(name, description) => {
               console.log("Saving design:", name, description);
-              // Here you would typically save to a database
-              // For now we just update the current design name
-              setCurrentDesign((prev) => ({
-                ...prev,
-                name: name,
-              }));
+              if (currentBuildPlan) {
+                setCurrentBuildPlan((prev) => prev ? ({
+                  ...prev,
+                  planName: name,
+                }) : null);
+              } else {
+                setDesignBrief(prev => ({...prev, description: name}));
+              }
             }}
-            defaultName={currentDesign.name}
-            defaultDescription=""
+            defaultName={currentBuildPlan?.planName || designBrief.description.substring(0,30)}
+            defaultDescription={currentBuildPlan?.designBrief.description || designBrief.description}
           />
           <ShareDesignDialog
-            designName={currentDesign.name}
-            designId={currentDesign.id}
+            designName={currentBuildPlan?.planName || "Untitled Design"}
+            designId={currentBuildPlan?.id || "N/A"}
             onExport={() => {
-              console.log("Exporting design:", currentDesign);
-              // Here you would generate a PDF or other export format
+              console.log("Exporting design:", currentBuildPlan);
               alert("Build plan exported! (This is a placeholder)");
             }}
           />
@@ -372,7 +278,7 @@ const FurnitureDesigner = () => {
             <Card className="col-span-2">
               <CardContent className="p-4 h-[600px]">
                 <ModelViewer
-                  modelType={currentDesign.modelType}
+                  modelType={currentBuildPlan?.designBrief.description.toLowerCase().includes("chair") ? "chair" : "table"}
                   backgroundColor="#f5f5f5"
                   showControls={true}
                   showGrid={false}
@@ -388,32 +294,28 @@ const FurnitureDesigner = () => {
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-medium">Name</h3>
-                      <p>{currentDesign.name}</p>
+                      <p>{currentBuildPlan?.planName || designBrief.description.substring(0,50)}</p>
                     </div>
                     <div>
                       <h3 className="font-medium">Material</h3>
-                      <p>{currentDesign.materials.join(", ")}</p>
+                      <p>{currentBuildPlan?.designBrief.material || designBrief.material || "Not specified"}</p>
                     </div>
                     <div>
                       <h3 className="font-medium">Dimensions</h3>
-                      <ul>
-                        {Object.entries(currentDesign.dimensions).map(
-                          ([key, value]) => (
-                            <li key={key}>
-                              {key.charAt(0).toUpperCase() + key.slice(1)}:{" "}
-                              {value}"
-                            </li>
-                          ),
-                        )}
-                      </ul>
+                      { (currentBuildPlan?.designBrief.targetDimensions || designBrief.targetDimensions) ?
+                        <ul>
+                          {Object.entries(currentBuildPlan?.designBrief.targetDimensions || designBrief.targetDimensions || {}).map(([key, value]) => {
+                            if (value && key !== 'units') return <li key={key}>{`${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}${ (currentBuildPlan?.designBrief.targetDimensions || designBrief.targetDimensions)?.units || 'in' }`}</li>;
+                            if (value && key === 'units') return <li key={key}>{`Units: ${value}`}</li>;
+                            return null;
+                          })}
+                        </ul>
+                        : <p>Not specified</p>
+                      }
                     </div>
                     <div>
                       <h3 className="font-medium">Style</h3>
-                      <p>{currentDesign.style}</p>
-                    </div>
-                    <div>
-                      <h3 className="font-medium">Joinery Methods</h3>
-                      <p>{currentDesign.joineryMethods.join(", ")}</p>
+                      <p>{currentBuildPlan?.designBrief.style || designBrief.style || "Not specified"}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -428,13 +330,14 @@ const FurnitureDesigner = () => {
 
                 <TabsContent value="dimensions">
                   <DimensionControls
-                    dimensions={currentDesign.dimensions}
-                    onDimensionChange={(key, value) => {
-                      setCurrentDesign((prev) => ({
+                    dimensions={designBrief.targetDimensions || { units: "in" }}
+                    onDimensionChange={(key, value, unit) => {
+                      setDesignBrief((prev) => ({
                         ...prev,
-                        dimensions: {
-                          ...prev.dimensions,
+                        targetDimensions: {
+                          ...(prev.targetDimensions || { units: "in" }),
                           [key]: value,
+                          units: unit || prev.targetDimensions?.units || "in",
                         },
                       }));
                     }}
@@ -455,11 +358,11 @@ const FurnitureDesigner = () => {
 
                 <TabsContent value="materials">
                   <MaterialSelector
-                    selectedMaterial={currentDesign.materials[0]}
+                    selectedMaterial={designBrief.material || ""}
                     onSelectMaterial={(materialName) => {
-                      setCurrentDesign((prev) => ({
+                      setDesignBrief((prev) => ({
                         ...prev,
-                        materials: [materialName],
+                        material: materialName,
                       }));
                     }}
                   />
@@ -467,11 +370,10 @@ const FurnitureDesigner = () => {
 
                 <TabsContent value="style">
                   <StyleSelector
-                    selectedStyle={currentDesign.style
+                    selectedStyle={(designBrief.style || "Modern")
                       .toLowerCase()
                       .replace(" ", "-")}
                     onStyleChange={(styleId) => {
-                      // Convert style ID to display name
                       let styleName = styleId
                         .split("-")
                         .map(
@@ -480,7 +382,7 @@ const FurnitureDesigner = () => {
                         )
                         .join(" ");
 
-                      setCurrentDesign((prev) => ({
+                      setDesignBrief((prev) => ({
                         ...prev,
                         style: styleName,
                       }));
@@ -495,7 +397,7 @@ const FurnitureDesigner = () => {
         <TabsContent value="build" className="mt-2">
           <BuildPlanTabs
             components={generateComponents()}
-            cutList={generateComponents()}
+            cutList={generateCutList()}
           />
         </TabsContent>
 
