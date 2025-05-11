@@ -29,7 +29,6 @@ function Box(props: any) {
 }
 
 function Table() {
-  // Table top
   return (
     <group position={[0, 0, 0]}>
       {/* Table top */}
@@ -60,12 +59,125 @@ function Table() {
 }
 
 interface ModelViewerProps {
-  modelType?: "table" | "chair" | "box" | "custom";
+  modelType?: "table" | "chair" | "desk" | "bookshelf" | "box" | "custom";
   backgroundColor?: string;
   showControls?: boolean;
   customModelUrl?: string;
   rotationSpeed?: number;
   showGrid?: boolean;
+  materialColor?: string;
+}
+
+function Chair() {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Seat */}
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[0.8, 0.1, 0.8]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+
+      {/* Back */}
+      <mesh position={[0, 1.2, -0.35]}>
+        <boxGeometry args={[0.8, 1.3, 0.1]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+
+      {/* Legs */}
+      <mesh position={[-0.3, 0.25, -0.3]}>
+        <boxGeometry args={[0.08, 0.5, 0.08]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+      <mesh position={[0.3, 0.25, -0.3]}>
+        <boxGeometry args={[0.08, 0.5, 0.08]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+      <mesh position={[-0.3, 0.25, 0.3]}>
+        <boxGeometry args={[0.08, 0.5, 0.08]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+      <mesh position={[0.3, 0.25, 0.3]}>
+        <boxGeometry args={[0.08, 0.5, 0.08]} />
+        <meshStandardMaterial color="#A0522D" />
+      </mesh>
+    </group>
+  );
+}
+
+function Desk() {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Desktop */}
+      <mesh position={[0, 0.9, 0]}>
+        <boxGeometry args={[2.2, 0.1, 1.2]} />
+        <meshStandardMaterial color="#5C4033" />
+      </mesh>
+
+      {/* Legs */}
+      <mesh position={[-1, 0.45, -0.5]}>
+        <boxGeometry args={[0.1, 0.9, 0.1]} />
+        <meshStandardMaterial color="#5C4033" />
+      </mesh>
+      <mesh position={[1, 0.45, -0.5]}>
+        <boxGeometry args={[0.1, 0.9, 0.1]} />
+        <meshStandardMaterial color="#5C4033" />
+      </mesh>
+      <mesh position={[-1, 0.45, 0.5]}>
+        <boxGeometry args={[0.1, 0.9, 0.1]} />
+        <meshStandardMaterial color="#5C4033" />
+      </mesh>
+      <mesh position={[1, 0.45, 0.5]}>
+        <boxGeometry args={[0.1, 0.9, 0.1]} />
+        <meshStandardMaterial color="#5C4033" />
+      </mesh>
+
+      {/* Drawer */}
+      <mesh position={[0, 0.7, 0]}>
+        <boxGeometry args={[0.8, 0.3, 1]} />
+        <meshStandardMaterial color="#6F4E37" />
+      </mesh>
+    </group>
+  );
+}
+
+function Bookshelf() {
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Back panel */}
+      <mesh position={[0, 1, -0.4]}>
+        <boxGeometry args={[1.5, 2, 0.05]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+
+      {/* Side panels */}
+      <mesh position={[-0.725, 1, 0]}>
+        <boxGeometry args={[0.05, 2, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+      <mesh position={[0.725, 1, 0]}>
+        <boxGeometry args={[0.05, 2, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+
+      {/* Shelves */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[1.5, 0.05, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+      <mesh position={[0, 0.7, 0]}>
+        <boxGeometry args={[1.5, 0.05, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+      <mesh position={[0, 1.4, 0]}>
+        <boxGeometry args={[1.5, 0.05, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+      <mesh position={[0, 2, 0]}>
+        <boxGeometry args={[1.5, 0.05, 0.8]} />
+        <meshStandardMaterial color="#8B4513" />
+      </mesh>
+    </group>
+  );
 }
 
 function CustomModel({ url }: { url: string }) {
@@ -80,6 +192,7 @@ const ModelViewer = ({
   customModelUrl = "",
   rotationSpeed = 0.5,
   showGrid = false,
+  materialColor = "#8B4513",
 }: ModelViewerProps) => {
   return (
     <div className="w-full h-full bg-background border rounded-lg overflow-hidden">
@@ -91,6 +204,9 @@ const ModelViewer = ({
 
           {modelType === "box" && <Box position={[0, 0, 0]} color="#6366f1" />}
           {modelType === "table" && <Table />}
+          {modelType === "chair" && <Chair />}
+          {modelType === "desk" && <Desk />}
+          {modelType === "bookshelf" && <Bookshelf />}
           {modelType === "custom" && customModelUrl && (
             <CustomModel url={customModelUrl} />
           )}
