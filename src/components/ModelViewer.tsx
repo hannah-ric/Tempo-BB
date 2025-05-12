@@ -1,4 +1,4 @@
-import React, { useRef, Suspense } from "react";
+import React, { useRef, Suspense, useMemo } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -7,6 +7,7 @@ import {
   useGLTF,
 } from "@react-three/drei";
 import * as THREE from "three";
+import { BuildPlan, ComponentModel } from "../types/design";
 
 function Box(props: any) {
   const meshRef = useRef<THREE.Mesh>(null);
@@ -66,6 +67,7 @@ interface ModelViewerProps {
   rotationSpeed?: number;
   showGrid?: boolean;
   materialColor?: string;
+  buildPlan?: BuildPlan;
 }
 
 function Chair() {
@@ -185,6 +187,9 @@ function CustomModel({ url }: { url: string }) {
   return <primitive object={scene} scale={1} position={[0, 0, 0]} />;
 }
 
+// Import the DynamicFurniture component
+import DynamicFurniture from "./DynamicFurniture";
+
 const ModelViewer = ({
   modelType = "table",
   backgroundColor = "#f5f5f5",
@@ -193,6 +198,7 @@ const ModelViewer = ({
   rotationSpeed = 0.5,
   showGrid = false,
   materialColor = "#8B4513",
+  buildPlan,
 }: ModelViewerProps) => {
   return (
     <div className="w-full h-full bg-background border rounded-lg overflow-hidden">
@@ -202,13 +208,26 @@ const ModelViewer = ({
           <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} />
           <pointLight position={[-10, -10, -10]} />
 
-          {modelType === "box" && <Box position={[0, 0, 0]} color="#6366f1" />}
-          {modelType === "table" && <Table />}
-          {modelType === "chair" && <Chair />}
-          {modelType === "desk" && <Desk />}
-          {modelType === "bookshelf" && <Bookshelf />}
-          {modelType === "custom" && customModelUrl && (
-            <CustomModel url={customModelUrl} />
+          {buildPlan &&
+          buildPlan.components &&
+          buildPlan.components.length > 0 ? (
+            <DynamicFurniture
+              buildPlan={buildPlan}
+              materialColor={materialColor}
+            />
+          ) : (
+            <>
+              {modelType === "box" && (
+                <Box position={[0, 0, 0]} color="#6366f1" />
+              )}
+              {modelType === "table" && <Table />}
+              {modelType === "chair" && <Chair />}
+              {modelType === "desk" && <Desk />}
+              {modelType === "bookshelf" && <Bookshelf />}
+              {modelType === "custom" && customModelUrl && (
+                <CustomModel url={customModelUrl} />
+              )}
+            </>
           )}
 
           {showControls && <OrbitControls />}

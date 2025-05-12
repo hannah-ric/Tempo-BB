@@ -12,13 +12,13 @@ interface JoineryMethod {
 }
 
 interface JoinerySelectorProps {
-  selectedMethods: string[];
+  selectedMethods?: string[];
   onJoineryChange: (methods: string[]) => void;
   joineryMethods?: JoineryMethod[];
 }
 
 const JoinerySelector = ({
-  selectedMethods,
+  selectedMethods = [],
   onJoineryChange,
   joineryMethods = [
     {

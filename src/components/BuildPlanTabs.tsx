@@ -56,153 +56,11 @@ interface BuildPlanTabsProps {
 }
 
 const BuildPlanTabs = ({
-  components = [
-    {
-      id: "1",
-      name: "Table Top",
-      material: "Maple",
-      dimensions: { length: 60, width: 30, thickness: 1.5 },
-      quantity: 1,
-    },
-    {
-      id: "2",
-      name: "Leg",
-      material: "Maple",
-      dimensions: { length: 29, width: 2, thickness: 2 },
-      quantity: 4,
-    },
-    {
-      id: "3",
-      name: "Apron",
-      material: "Maple",
-      dimensions: { length: 56, width: 4, thickness: 0.75 },
-      quantity: 2,
-    },
-    {
-      id: "4",
-      name: "Apron",
-      material: "Maple",
-      dimensions: { length: 26, width: 4, thickness: 0.75 },
-      quantity: 2,
-    },
-  ],
-  cutList = [
-    {
-      id: "1",
-      name: "Table Top",
-      material: "Maple",
-      dimensions: { length: 60, width: 30, thickness: 1.5 },
-      quantity: 1,
-    },
-    {
-      id: "2",
-      name: "Leg",
-      material: "Maple",
-      dimensions: { length: 29, width: 2, thickness: 2 },
-      quantity: 4,
-    },
-    {
-      id: "3",
-      name: "Apron",
-      material: "Maple",
-      dimensions: { length: 56, width: 4, thickness: 0.75 },
-      quantity: 2,
-    },
-    {
-      id: "4",
-      name: "Apron",
-      material: "Maple",
-      dimensions: { length: 26, width: 4, thickness: 0.75 },
-      quantity: 2,
-    },
-  ],
-  materials = [
-    {
-      id: "1",
-      name: "Maple",
-      type: "Hardwood",
-      quantity: 25,
-      unit: "board feet",
-    },
-    {
-      id: "2",
-      name: "Wood Glue",
-      type: "Adhesive",
-      quantity: 1,
-      unit: "bottle",
-    },
-    {
-      id: "3",
-      name: "Finish",
-      type: "Polyurethane",
-      quantity: 1,
-      unit: "quart",
-    },
-  ],
-  hardware = [
-    {
-      id: "1",
-      name: "Corner Bracket",
-      type: "Bracket",
-      size: '2"',
-      quantity: 4,
-    },
-    {
-      id: "2",
-      name: "Wood Screw",
-      type: "Screw",
-      size: '1.5" #8',
-      quantity: 16,
-    },
-    {
-      id: "3",
-      name: "Table Top Fastener",
-      type: "Fastener",
-      size: "Standard",
-      quantity: 8,
-    },
-  ],
-  assemblySteps = [
-    {
-      id: "1",
-      stepNumber: 1,
-      description: "Cut all pieces according to the cut list dimensions.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1567604130959-7a3d8a8ecd8c?w=600&q=80",
-    },
-    {
-      id: "2",
-      stepNumber: 2,
-      description:
-        "Sand all pieces to 220 grit, starting with 80, then 120, then 220.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1622043945901-080c9c1c7af0?w=600&q=80",
-    },
-    {
-      id: "3",
-      stepNumber: 3,
-      description:
-        "Attach the aprons to the legs using corner brackets and wood screws.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1581094288338-2314dddb7ece?w=600&q=80",
-    },
-    {
-      id: "4",
-      stepNumber: 4,
-      description:
-        "Attach the table top to the base using table top fasteners.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1598106755735-4f9a147d6c84?w=600&q=80",
-    },
-    {
-      id: "5",
-      stepNumber: 5,
-      description:
-        "Apply finish according to manufacturer instructions, allowing proper drying time between coats.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1588854337115-1c67d9247e4d?w=600&q=80",
-    },
-  ],
+  components = [],
+  cutList = [],
+  materials = [],
+  hardware = [],
+  assemblySteps = [],
 }: BuildPlanTabsProps) => {
   const [activeTab, setActiveTab] = useState("components");
 
@@ -248,18 +106,28 @@ const BuildPlanTabs = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {components.map((component) => (
-                    <TableRow key={component.id}>
-                      <TableCell>{component.name}</TableCell>
-                      <TableCell>{component.material}</TableCell>
-                      <TableCell>
-                        {component.dimensions.length}" ×{" "}
-                        {component.dimensions.width}" ×{" "}
-                        {component.dimensions.thickness}"
+                  {components.length > 0 ? (
+                    components.map((component) => (
+                      <TableRow key={component.id}>
+                        <TableCell>{component.name}</TableCell>
+                        <TableCell>
+                          {component.material || component.materialId}
+                        </TableCell>
+                        <TableCell>
+                          {typeof component.dimensions === "object"
+                            ? `${component.dimensions.length}" × ${component.dimensions.width}" × ${component.dimensions.thickness}"`
+                            : component.dimensions || "N/A"}
+                        </TableCell>
+                        <TableCell>{component.quantity}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">
+                        No components available
                       </TableCell>
-                      <TableCell>{component.quantity}</TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -279,17 +147,28 @@ const BuildPlanTabs = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cutList.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.material}</TableCell>
-                      <TableCell>
-                        {item.dimensions.length}" × {item.dimensions.width}" ×{" "}
-                        {item.dimensions.thickness}"
+                  {cutList.length > 0 ? (
+                    cutList.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          {item.componentName || item.name || item.partName}
+                        </TableCell>
+                        <TableCell>{item.material}</TableCell>
+                        <TableCell>
+                          {item.dimensions
+                            ? `${item.dimensions.length}" × ${item.dimensions.width}" × ${item.dimensions.thickness}"`
+                            : `${item.length || "N/A"} × ${item.width || "N/A"} × ${item.thickness || "N/A"}`}
+                        </TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">
+                        No cut list available
                       </TableCell>
-                      <TableCell>{item.quantity}</TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -309,14 +188,22 @@ const BuildPlanTabs = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {materials.map((material) => (
-                    <TableRow key={material.id}>
-                      <TableCell>{material.name}</TableCell>
-                      <TableCell>{material.type}</TableCell>
-                      <TableCell>{material.quantity}</TableCell>
-                      <TableCell>{material.unit}</TableCell>
+                  {materials.length > 0 ? (
+                    materials.map((material) => (
+                      <TableRow key={material.id}>
+                        <TableCell>{material.name}</TableCell>
+                        <TableCell>{material.type}</TableCell>
+                        <TableCell>{material.quantity}</TableCell>
+                        <TableCell>{material.unit || "units"}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">
+                        No materials available
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -336,14 +223,22 @@ const BuildPlanTabs = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {hardware.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell>{item.type}</TableCell>
-                      <TableCell>{item.size}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
+                  {hardware.length > 0 ? (
+                    hardware.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell>{item.type}</TableCell>
+                        <TableCell>{item.size || "Standard"}</TableCell>
+                        <TableCell>{item.quantity}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-4">
+                        No hardware available
+                      </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -354,25 +249,31 @@ const BuildPlanTabs = ({
           <Card>
             <CardContent className="p-4">
               <div className="space-y-8">
-                {assemblySteps.map((step) => (
-                  <div key={step.id} className="flex gap-6">
-                    <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
-                      {step.stepNumber}
+                {assemblySteps.length > 0 ? (
+                  assemblySteps.map((step) => (
+                    <div key={step.id} className="flex gap-6">
+                      <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
+                        {step.stepNumber}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-lg mb-3">{step.description}</p>
+                        {step.imageUrl && (
+                          <div className="rounded-md overflow-hidden h-48 w-full">
+                            <img
+                              src={step.imageUrl}
+                              alt={`Step ${step.stepNumber}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-lg mb-3">{step.description}</p>
-                      {step.imageUrl && (
-                        <div className="rounded-md overflow-hidden h-48 w-full">
-                          <img
-                            src={step.imageUrl}
-                            alt={`Step ${step.stepNumber}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8">
+                    <p>No assembly steps available</p>
                   </div>
-                ))}
+                )}
               </div>
             </CardContent>
           </Card>
