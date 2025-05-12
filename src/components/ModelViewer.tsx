@@ -68,6 +68,7 @@ interface ModelViewerProps {
   showGrid?: boolean;
   materialColor?: string;
   buildPlan?: BuildPlan;
+  viewMode?: "assembled" | "exploded" | "animated";
 }
 
 function Chair() {
@@ -199,6 +200,7 @@ const ModelViewer = ({
   showGrid = false,
   materialColor = "#8B4513",
   buildPlan,
+  viewMode = "assembled",
 }: ModelViewerProps) => {
   return (
     <div className="w-full h-full bg-background border rounded-lg overflow-hidden">
@@ -214,6 +216,8 @@ const ModelViewer = ({
             <DynamicFurniture
               buildPlan={buildPlan}
               materialColor={materialColor}
+              viewMode={viewMode}
+              rotationSpeed={rotationSpeed}
             />
           ) : (
             <>

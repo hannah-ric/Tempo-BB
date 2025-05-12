@@ -10,46 +10,34 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Download, Printer, Share2 } from "lucide-react";
+import { Printer, Share2 } from "lucide-react";
+import ExportDialog from "./ExportDialog";
 
-interface Component {
-  id: string;
-  name: string;
-  material: string;
-  dimensions: {
-    length: number;
-    width: number;
-    thickness: number;
-  };
-  quantity: number;
+import {
+  ComponentModel,
+  MaterialModel,
+  HardwareModel,
+  CutListItem,
+  AssemblyStep,
+} from "../types/design";
+
+interface Component extends ComponentModel {
+  material?: string;
 }
 
-interface Material {
-  id: string;
-  name: string;
-  type: string;
-  quantity: number;
-  unit: string;
+interface Material extends MaterialModel {
+  quantity?: number;
 }
 
-interface Hardware {
-  id: string;
-  name: string;
-  type: string;
-  size: string;
-  quantity: number;
+interface Hardware extends HardwareModel {
+  quantity?: number;
 }
 
-interface AssemblyStep {
-  id: string;
-  stepNumber: number;
-  description: string;
-  imageUrl?: string;
-}
+// Using types from design.ts
 
 interface BuildPlanTabsProps {
   components?: Component[];
-  cutList?: Component[];
+  cutList?: CutListItem[];
   materials?: Material[];
   hardware?: Hardware[];
   assemblySteps?: AssemblyStep[];
@@ -63,16 +51,35 @@ const BuildPlanTabs = ({
   assemblySteps = [],
 }: BuildPlanTabsProps) => {
   const [activeTab, setActiveTab] = useState("components");
+  const [currentStep, setCurrentStep] = useState(0);
 
   return (
     <div className="w-full bg-background border rounded-lg p-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold">Build Plan</h2>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
+          <ExportDialog
+            buildPlan={{
+              id: "plan-1",
+              userId: "user-1",
+              planName: "Furniture Plan",
+              designBrief: { description: "Furniture design" },
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              components: components as any,
+              materials: materials as any,
+              hardware: hardware as any,
+              joinery: [],
+              cutList: cutList as any,
+              billOfMaterials: [],
+              assemblyInstructions: assemblySteps as any,
+              status: "Draft",
+              version: 1,
+            }}
+            onExport={(format, section) => {
+              console.log(`Exported ${section} as ${format}`);
+            }}
+          />
           <Button variant="outline" size="sm">
             <Printer className="h-4 w-4 mr-2" />
             Print
@@ -248,33 +255,76 @@ const BuildPlanTabs = ({
         <TabsContent value="assembly" className="mt-2">
           <Card>
             <CardContent className="p-4">
-              <div className="space-y-8">
-                {assemblySteps.length > 0 ? (
-                  assemblySteps.map((step) => (
-                    <div key={step.id} className="flex gap-6">
+              {assemblySteps.length > 0 ? (
+                <>
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">
+                        Step {currentStep + 1} of {assemblySteps.length}
+                      </span>
+                      <div className="w-48 h-2 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary transition-all duration-300 ease-in-out"
+                          style={{
+                            width: `${((currentStep + 1) / assemblySteps.length) * 100}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    <div
+                      key={assemblySteps[currentStep].id}
+                      className="flex gap-6"
+                    >
                       <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xl font-bold">
-                        {step.stepNumber}
+                        {assemblySteps[currentStep].stepNumber}
                       </div>
                       <div className="flex-1">
-                        <p className="text-lg mb-3">{step.description}</p>
-                        {step.imageUrl && (
+                        <p className="text-lg mb-3">
+                          {assemblySteps[currentStep].description}
+                        </p>
+                        {assemblySteps[currentStep].imageUrl && (
                           <div className="rounded-md overflow-hidden h-48 w-full">
                             <img
-                              src={step.imageUrl}
-                              alt={`Step ${step.stepNumber}`}
+                              src={assemblySteps[currentStep].imageUrl}
+                              alt={`Step ${assemblySteps[currentStep].stepNumber}`}
                               className="w-full h-full object-cover"
                             />
                           </div>
                         )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8">
-                    <p>No assembly steps available</p>
                   </div>
-                )}
-              </div>
+
+                  <div className="flex justify-between mt-8">
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        setCurrentStep((prev) => Math.max(0, prev - 1))
+                      }
+                      disabled={currentStep === 0}
+                    >
+                      Previous Step
+                    </Button>
+                    <Button
+                      onClick={() =>
+                        setCurrentStep((prev) =>
+                          Math.min(assemblySteps.length - 1, prev + 1),
+                        )
+                      }
+                      disabled={currentStep === assemblySteps.length - 1}
+                    >
+                      Next Step
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <p>No assembly steps available</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

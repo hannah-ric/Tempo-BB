@@ -10,6 +10,8 @@ import StyleSelector from "@/components/StyleSelector";
 import JoinerySelector from "@/components/JoinerySelector";
 import SaveDesignDialog from "@/components/SaveDesignDialog";
 import ShareDesignDialog from "@/components/ShareDesignDialog";
+import BuildPlanList from "@/components/BuildPlanList";
+import { getBuildPlan, saveBuildPlan } from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Save, Share2 } from "lucide-react";
 import {
@@ -21,6 +23,10 @@ import {
   JoineryModel,
 } from "../types/design";
 import { generatePlanFromBrief } from "../../services/aiPlannerService";
+import {
+  processNaturalLanguageInput,
+  generateAIResponse,
+} from "../lib/nlpProcessor";
 
 interface Message {
   id: string;
@@ -31,6 +37,7 @@ interface Message {
 
 const FurnitureDesigner = () => {
   const [activeTab, setActiveTab] = useState("design");
+  const [showSavedPlans, setShowSavedPlans] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -51,6 +58,10 @@ const FurnitureDesigner = () => {
   const [currentBuildPlan, setCurrentBuildPlan] = useState<BuildPlan | null>(
     null,
   );
+  const [viewMode, setViewMode] = useState<
+    "assembled" | "exploded" | "animated"
+  >("assembled");
+  const [autoRotate, setAutoRotate] = useState(false);
 
   useEffect(() => {
     if (
@@ -112,219 +123,51 @@ const FurnitureDesigner = () => {
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiResponse]);
+
+      // If this is a new design request, reset the design brief
+      const lowerMessage = message.toLowerCase();
+      if (
+        lowerMessage.includes("new design") ||
+        lowerMessage.includes("start over")
+      ) {
+        setDesignBrief({
+          description: "A new furniture design",
+          targetDimensions: { units: "in" },
+        });
+        setCurrentBuildPlan(null);
+        setSelectedJoineryMethods([]);
+      }
     }, 1500);
   };
 
+  // Process the user message using the NLP processor functions
+
   const processUserMessage = (message: string) => {
-    const lowerMessage = message.toLowerCase();
-    let briefUpdates: Partial<FurnitureDesignBrief> = {};
-    let dimensionsChanged = false;
-    let joineryChanged = false;
+    // Process the message using the NLP processor
+    const updatedBrief = processNaturalLanguageInput(message, designBrief);
 
-    // Material parsing
-    if (
-      lowerMessage.includes("walnut") ||
-      lowerMessage.includes("oak") ||
-      lowerMessage.includes("maple") ||
-      lowerMessage.includes("cherry")
-    ) {
-      const materials = ["walnut", "oak", "maple", "cherry"];
-      const foundMaterial = materials.find((m) => lowerMessage.includes(m));
-      if (foundMaterial) {
-        briefUpdates.material =
-          foundMaterial.charAt(0).toUpperCase() + foundMaterial.slice(1);
-      }
-    }
+    // Update joinery methods in the UI if they were changed
+    if (updatedBrief.joineryMethods) {
+      const joineryIds = Array.isArray(updatedBrief.joineryMethods)
+        ? updatedBrief.joineryMethods.map((j) =>
+            j.toLowerCase().replace(/ and /g, "-and-").replace(/ /g, "-"),
+          )
+        : [
+            updatedBrief.joineryMethods
+              .toLowerCase()
+              .replace(/ and /g, "-and-")
+              .replace(/ /g, "-"),
+          ];
 
-    // Style parsing
-    if (lowerMessage.includes("style")) {
-      const styleKeywords = [
-        "modern",
-        "traditional",
-        "mid-century",
-        "rustic",
-        "industrial",
-      ];
-      const foundStyle = styleKeywords.find((s) => lowerMessage.includes(s));
-      if (foundStyle) {
-        briefUpdates.style = foundStyle
-          .split("-")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-      }
-    }
-
-    // Joinery parsing
-    const joineryKeywords = [
-      "mortise and tenon",
-      "dovetail",
-      "pocket hole",
-      "butt joint",
-      "miter joint",
-    ];
-
-    const foundJoinery = joineryKeywords.filter((j) =>
-      lowerMessage.includes(j),
-    );
-    if (foundJoinery.length > 0) {
-      joineryChanged = true;
-
-      // Convert to proper format and update selected methods
-      const joineryIds = foundJoinery.map((j) =>
-        j.toLowerCase().replace(/ and /g, "-and-").replace(/ /g, "-"),
-      );
       setSelectedJoineryMethods((prevMethods) => {
         // Add new methods without duplicates
         const newMethods = [...new Set([...prevMethods, ...joineryIds])];
         return newMethods;
       });
-
-      // Update the brief with proper names
-      const joineryNames = foundJoinery.map((j) =>
-        j
-          .split(" ")
-          .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" "),
-      );
-
-      briefUpdates.joineryMethods = joineryNames;
     }
 
-    // Dimension parsing (heuristic)
-    const dimRegex =
-      /(\d+\.?\d*)\s*(inches|inch|in|cm|centimeters|mm|millimeters|feet|foot|ft)/g;
-    let match;
-    const newTargetDimensions = {
-      ...(designBrief.targetDimensions || { units: "in" }),
-    };
-
-    while ((match = dimRegex.exec(lowerMessage)) !== null) {
-      const value = match[1];
-      const unit = match[2].toLowerCase();
-      let currentUnit = newTargetDimensions.units || "in";
-
-      if (unit.startsWith("in")) currentUnit = "in";
-      else if (unit.startsWith("cm")) currentUnit = "cm";
-      else if (unit.startsWith("mm")) currentUnit = "mm";
-      // Basic conversion for feet to inches for simplicity
-      else if (unit.startsWith("ft") || unit.startsWith("foot")) {
-        const feetValue = parseFloat(value);
-        if (!isNaN(feetValue)) {
-          // assign to a dimension keyword if found near the value
-          const dimKeywordMatch = lowerMessage
-            .substring(0, match.index)
-            .match(/(length|width|height|depth)\s*$/);
-          const keyword = dimKeywordMatch ? dimKeywordMatch[1] : null;
-          if (keyword)
-            (newTargetDimensions as any)[keyword] = (feetValue * 12).toString();
-          dimensionsChanged = true;
-          newTargetDimensions.units = "in"; // Standardize to inches if feet are mentioned
-          continue; // Skip assigning to generic dimension if feet directly assigned
-        }
-      }
-
-      newTargetDimensions.units = currentUnit;
-
-      // Try to associate with a dimension keyword if it precedes the number
-      const precedingText = lowerMessage.substring(0, match.index);
-      if (precedingText.match(/(length|long)/i))
-        newTargetDimensions.length = value;
-      else if (precedingText.match(/(width|wide)/i))
-        newTargetDimensions.width = value;
-      else if (precedingText.match(/(height|tall)/i))
-        newTargetDimensions.height = value;
-      else if (precedingText.match(/depth/i)) newTargetDimensions.depth = value;
-      // Basic fallback: if no keyword, try to assign to first available L/W/H based on common order
-      else if (!newTargetDimensions.length) newTargetDimensions.length = value;
-      else if (!newTargetDimensions.width) newTargetDimensions.width = value;
-      else if (!newTargetDimensions.height) newTargetDimensions.height = value;
-      dimensionsChanged = true;
-    }
-    if (dimensionsChanged) {
-      briefUpdates.targetDimensions = newTargetDimensions;
-    }
-
-    // Update description logic
-    if (
-      Object.keys(briefUpdates).length === 0 &&
-      message.length > 10 &&
-      !dimensionsChanged &&
-      !joineryChanged
-    ) {
-      briefUpdates.description = message;
-    } else if (
-      Object.keys(briefUpdates).length > 0 ||
-      dimensionsChanged ||
-      joineryChanged
-    ) {
-      // If specific fields were updated, or dimensions changed, ensure description reflects the original message for context
-      if (!briefUpdates.description && designBrief.description !== message) {
-        briefUpdates.description = `${designBrief.description} (Processed: ${message})`;
-      }
-    }
-
-    setDesignBrief((prev) => ({
-      ...prev,
-      ...briefUpdates,
-      description: briefUpdates.description || prev.description, // Keep old description if not updated
-      targetDimensions: briefUpdates.targetDimensions || prev.targetDimensions, // Persist targetDimensions
-    }));
-  };
-
-  const generateAIResponse = (
-    message: string,
-    currentBrief: FurnitureDesignBrief,
-  ): string => {
-    const lowerMessage = message.toLowerCase();
-
-    if (
-      currentBrief.material &&
-      (lowerMessage.includes(currentBrief.material.toLowerCase()) ||
-        lowerMessage.includes("material"))
-    ) {
-      return `OK! I've noted the material as ${currentBrief.material}. The AI will consider this for the build plan.`;
-    }
-
-    if (
-      currentBrief.style &&
-      (lowerMessage.includes(currentBrief.style.toLowerCase()) ||
-        lowerMessage.includes("style"))
-    ) {
-      return `Understood. The style is set to ${currentBrief.style}. This will be used in the plan generation.`;
-    }
-
-    if (
-      currentBrief.joineryMethods &&
-      (lowerMessage.includes("joinery") ||
-        lowerMessage.includes("joint") ||
-        lowerMessage.includes("dovetail") ||
-        lowerMessage.includes("mortise") ||
-        lowerMessage.includes("tenon"))
-    ) {
-      const joineryList = Array.isArray(currentBrief.joineryMethods)
-        ? currentBrief.joineryMethods.join(", ")
-        : currentBrief.joineryMethods;
-      return `Great! I've updated the joinery methods to include ${joineryList}. These will be incorporated into your build plan.`;
-    }
-
-    if (
-      lowerMessage.includes("tall") ||
-      lowerMessage.includes("height") ||
-      lowerMessage.includes("wide") ||
-      lowerMessage.includes("width") ||
-      lowerMessage.includes("long") ||
-      lowerMessage.includes("length") ||
-      lowerMessage.includes("deep") ||
-      lowerMessage.includes("depth")
-    ) {
-      return `I've updated the design brief with your dimension requests: "${message}". The AI will generate a detailed plan based on this.`;
-    }
-
-    if (isProcessing) {
-      return `I've updated the design brief: "${message}". The detailed build plan is currently being generated...`;
-    }
-
-    return `I've updated the design brief with: "${message}". The AI will generate a plan. What else?`;
+    // Update the design brief state
+    setDesignBrief(updatedBrief);
   };
 
   const generateComponents = (): ComponentModel[] => {
@@ -401,11 +244,19 @@ const FurnitureDesigner = () => {
                     ? {
                         ...prev,
                         planName: name,
+                        designBrief: {
+                          ...prev.designBrief,
+                          description: description,
+                        },
                       }
                     : null,
                 );
               } else {
-                setDesignBrief((prev) => ({ ...prev, description: name }));
+                setDesignBrief((prev) => ({
+                  ...prev,
+                  description: description,
+                  name: name,
+                }));
               }
             }}
             defaultName={
@@ -416,6 +267,8 @@ const FurnitureDesigner = () => {
               currentBuildPlan?.designBrief.description ||
               designBrief.description
             }
+            buildPlan={currentBuildPlan}
+            isUpdate={!!currentBuildPlan?.id}
           />
           <ShareDesignDialog
             designName={currentBuildPlan?.planName || "Untitled Design"}
@@ -429,9 +282,10 @@ const FurnitureDesigner = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-3 mb-4">
+        <TabsList className="grid grid-cols-4 mb-4">
           <TabsTrigger value="design">Design</TabsTrigger>
           <TabsTrigger value="build">Build Plan</TabsTrigger>
+          <TabsTrigger value="saved">Saved Plans</TabsTrigger>
           <TabsTrigger value="chat">AI Assistant</TabsTrigger>
         </TabsList>
 
@@ -439,10 +293,40 @@ const FurnitureDesigner = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Card className="col-span-2">
               <CardContent className="p-4 h-[600px]">
+                <div className="flex justify-end mb-2 space-x-2">
+                  <Button
+                    variant={viewMode === "assembled" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewMode("assembled")}
+                  >
+                    Assembled
+                  </Button>
+                  <Button
+                    variant={viewMode === "exploded" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewMode("exploded")}
+                  >
+                    Exploded
+                  </Button>
+                  <Button
+                    variant={viewMode === "animated" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setViewMode("animated")}
+                  >
+                    Animated
+                  </Button>
+                  <Button
+                    variant={autoRotate ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAutoRotate(!autoRotate)}
+                  >
+                    Auto-Rotate
+                  </Button>
+                </div>
                 <ModelViewer
                   modelType={
                     currentBuildPlan?.designBrief.description
-                      .toLowerCase()
+                      ?.toLowerCase()
                       .includes("chair")
                       ? "chair"
                       : "table"
@@ -451,6 +335,8 @@ const FurnitureDesigner = () => {
                   showControls={true}
                   showGrid={false}
                   buildPlan={currentBuildPlan}
+                  viewMode={viewMode}
+                  rotationSpeed={autoRotate ? 0.5 : 0}
                   materialColor={
                     currentBuildPlan?.designBrief.material
                       ?.toLowerCase()
@@ -634,8 +520,51 @@ const FurnitureDesigner = () => {
             cutList={currentBuildPlan?.cutList || generateCutList()}
             materials={currentBuildPlan?.materials || []}
             hardware={currentBuildPlan?.hardware || []}
-            assemblySteps={currentBuildPlan?.assemblySteps || []}
+            assemblySteps={currentBuildPlan?.assemblyInstructions || []}
           />
+        </TabsContent>
+
+        <TabsContent value="saved" className="mt-2">
+          <div className="h-[600px] overflow-y-auto">
+            <BuildPlanList
+              onSelectPlan={async (planId) => {
+                try {
+                  const plan = await getBuildPlan(planId);
+                  if (plan && plan.plan_data) {
+                    setCurrentBuildPlan(plan.plan_data);
+                    setActiveTab("design");
+                  }
+                } catch (error) {
+                  console.error("Error loading plan:", error);
+                }
+              }}
+              onEditPlan={(planId) => {
+                if (planId === "new") {
+                  // Reset to create a new plan
+                  setCurrentBuildPlan(null);
+                  setDesignBrief({
+                    description: "A new furniture design",
+                    targetDimensions: { units: "in" },
+                  });
+                  setActiveTab("design");
+                } else {
+                  // Load the plan for editing
+                  getBuildPlan(planId).then((plan) => {
+                    if (plan && plan.plan_data) {
+                      setCurrentBuildPlan(plan.plan_data);
+                      setActiveTab("design");
+                    }
+                  });
+                }
+              }}
+              onDeletePlan={(planId) => {
+                // If the current plan is deleted, reset the state
+                if (currentBuildPlan?.id === planId) {
+                  setCurrentBuildPlan(null);
+                }
+              }}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="chat" className="mt-2">

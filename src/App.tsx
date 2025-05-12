@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Routes, Route, useRoutes } from "react-router-dom";
 import FurnitureDesigner from "./pages/FurnitureDesigner";
 import routes from "tempo-routes";
+import AdminPanel from "./pages/AdminPanel";
 
 function App() {
   // Separate the tempo routes from the main routes
@@ -15,6 +16,7 @@ function App() {
 
       <Routes>
         <Route path="/" element={<FurnitureDesigner />} />
+        <Route path="/admin" element={<AdminPanel />} />
 
         {/* Add this before the catchall route */}
         {import.meta.env.VITE_TEMPO === "true" && (

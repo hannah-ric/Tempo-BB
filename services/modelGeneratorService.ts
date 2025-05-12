@@ -13,16 +13,43 @@ export const parseDimensions = (dimensionStr: string) => {
   const widthMatch = dimensionStr.match(/W:([\d.]+)\s*in/i);
   const thicknessMatch = dimensionStr.match(/T:([\d.]+)\s*in/i);
 
+  // Also try to match dimensions without the L:, W:, T: prefixes
+  const simpleLengthMatch =
+    !lengthMatch &&
+    dimensionStr.match(
+      /([\d.]+)\s*in\s*[×x]\s*([\d.]+)\s*in\s*[×x]\s*([\d.]+)\s*in/i,
+    );
+
   if (lengthMatch && lengthMatch[1] && !isNaN(parseFloat(lengthMatch[1])))
     dimensions.length = parseFloat(lengthMatch[1]) / 24; // Scale down for scene
+  else if (
+    simpleLengthMatch &&
+    simpleLengthMatch[1] &&
+    !isNaN(parseFloat(simpleLengthMatch[1]))
+  )
+    dimensions.length = parseFloat(simpleLengthMatch[1]) / 24; // Scale down for scene
+
   if (widthMatch && widthMatch[1] && !isNaN(parseFloat(widthMatch[1])))
     dimensions.width = parseFloat(widthMatch[1]) / 24; // Scale down for scene
+  else if (
+    simpleLengthMatch &&
+    simpleLengthMatch[2] &&
+    !isNaN(parseFloat(simpleLengthMatch[2]))
+  )
+    dimensions.width = parseFloat(simpleLengthMatch[2]) / 24; // Scale down for scene
+
   if (
     thicknessMatch &&
     thicknessMatch[1] &&
     !isNaN(parseFloat(thicknessMatch[1]))
   )
     dimensions.thickness = parseFloat(thicknessMatch[1]) / 24; // Scale down for scene
+  else if (
+    simpleLengthMatch &&
+    simpleLengthMatch[3] &&
+    !isNaN(parseFloat(simpleLengthMatch[3]))
+  )
+    dimensions.thickness = parseFloat(simpleLengthMatch[3]) / 24; // Scale down for scene
 
   return dimensions;
 };
@@ -102,52 +129,39 @@ export const getComponentPosition = (
   const { length, width, thickness } = parsedDimensions;
   const name = component.name ? component.name.toLowerCase() : "";
 
+  // Base height for positioning components vertically
+  const baseHeight = 0;
+
   if (name.includes("top") || name.includes("surface")) {
-    return [0, thickness / 2 + 0.75, 0];
+    return [0, baseHeight + 0.75, 0];
   } else if (name.includes("leg")) {
     // Position legs at corners
     const legPositions: Array<[number, number, number]> = [
-      [
-        -length / 2 + thickness / 2,
-        thickness / 2 + 0.35,
-        -width / 2 + thickness / 2,
-      ],
-      [
-        length / 2 - thickness / 2,
-        thickness / 2 + 0.35,
-        -width / 2 + thickness / 2,
-      ],
-      [
-        -length / 2 + thickness / 2,
-        thickness / 2 + 0.35,
-        width / 2 - thickness / 2,
-      ],
-      [
-        length / 2 - thickness / 2,
-        thickness / 2 + 0.35,
-        width / 2 - thickness / 2,
-      ],
+      [-length / 2 + thickness / 2, baseHeight, -width / 2 + thickness / 2],
+      [length / 2 - thickness / 2, baseHeight, -width / 2 + thickness / 2],
+      [-length / 2 + thickness / 2, baseHeight, width / 2 - thickness / 2],
+      [length / 2 - thickness / 2, baseHeight, width / 2 - thickness / 2],
     ];
     return legPositions[index % 4];
   } else if (name.includes("shelf")) {
-    return [0, thickness / 2 + 0.3 + index * 0.3, 0];
+    return [0, baseHeight + 0.3 + index * 0.3, 0];
   } else if (name.includes("back")) {
-    return [0, thickness / 2 + 0.5, -width / 2];
+    return [0, baseHeight + 0.5, -width / 2];
   } else if (name.includes("drawer")) {
-    return [0, thickness / 2 + 0.4 + index * 0.3, width / 4];
+    return [0, baseHeight + 0.4 + index * 0.3, width / 4];
   } else if (name.includes("apron") || name.includes("rail")) {
     // Position aprons/rails between legs
     const railPositions: Array<[number, number, number]> = [
-      [0, thickness / 2 + 0.6, -width / 2 + thickness / 2], // front
-      [0, thickness / 2 + 0.6, width / 2 - thickness / 2], // back
-      [-length / 2 + thickness / 2, thickness / 2 + 0.6, 0], // left
-      [length / 2 - thickness / 2, thickness / 2 + 0.6, 0], // right
+      [0, baseHeight + 0.6, -width / 2 + thickness / 2], // front
+      [0, baseHeight + 0.6, width / 2 - thickness / 2], // back
+      [-length / 2 + thickness / 2, baseHeight + 0.6, 0], // left
+      [length / 2 - thickness / 2, baseHeight + 0.6, 0], // right
     ];
     return railPositions[index % 4];
   }
 
   // Default positioning for other components
-  return [0, thickness / 2 + index * 0.2, 0];
+  return [0, baseHeight + index * 0.2, 0];
 };
 
 /**
