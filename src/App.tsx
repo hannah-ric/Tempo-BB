@@ -3,6 +3,7 @@ import { Routes, Route, useRoutes } from "react-router-dom";
 import FurnitureDesigner from "./pages/FurnitureDesigner";
 import routes from "tempo-routes";
 import AdminPanel from "./pages/AdminPanel";
+import Home from "./components/home";
 
 function App() {
   // Separate the tempo routes from the main routes
@@ -15,7 +16,8 @@ function App() {
       {tempoRoutes}
 
       <Routes>
-        <Route path="/" element={<FurnitureDesigner />} />
+        <Route path="/" element={<Home />} />
+        <Route path="/design" element={<FurnitureDesigner />} />
         <Route path="/admin" element={<AdminPanel />} />
 
         {/* Add this before the catchall route */}
@@ -24,7 +26,7 @@ function App() {
         )}
 
         {/* Catchall route */}
-        <Route path="*" element={<FurnitureDesigner />} />
+        <Route path="*" element={<Home />} />
       </Routes>
     </Suspense>
   );

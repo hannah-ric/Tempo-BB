@@ -263,7 +263,7 @@ Ensure all dimensions are appropriate for the furniture type, follow ergonomic s
 
     // 2. Call Supabase Edge Function that interfaces with GPT-4o
     const { data, error } = await supabase.functions.invoke(
-      "supabase-functions-generate-furniture-plan",
+      "supabase-functions-generate_furniture_plan",
       {
         body: { prompt, designBrief: brief },
       },
