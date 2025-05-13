@@ -14,7 +14,15 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
 
 // Build plan functions
-export async function saveBuildPlan(buildPlan: any) {
+export async function saveBuildPlan(buildPlan: any, userId?: string) {
+  // Get the current user ID from the session if not provided
+  if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    userId = session?.user?.id || "anonymous";
+  }
+
   // Check if this is an update to an existing plan
   if (buildPlan.id) {
     const { data, error } = await supabase
@@ -28,6 +36,8 @@ export async function saveBuildPlan(buildPlan: any) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", buildPlan.id)
+      // Only allow updates if the user owns the plan or if it's an anonymous plan
+      .or(`user_id.eq.${userId},user_id.eq.anonymous`)
       .select();
 
     if (error) {
@@ -42,7 +52,7 @@ export async function saveBuildPlan(buildPlan: any) {
       .from("build_plans")
       .insert([
         {
-          user_id: "system", // Replace with actual user ID when auth is implemented
+          user_id: userId,
           plan_name: buildPlan.planName || "Untitled Plan",
           design_brief: buildPlan.designBrief,
           plan_data: buildPlan,
@@ -76,11 +86,30 @@ export async function getBuildPlan(id: string) {
   return data;
 }
 
-export async function getUserBuildPlans() {
-  const { data, error } = await supabase
+export async function getUserBuildPlans(userId?: string) {
+  // Get the current user ID from the session if not provided
+  if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    userId = session?.user?.id;
+  }
+
+  // If we have a user ID, fetch their plans, otherwise fetch anonymous plans
+  const query = supabase
     .from("build_plans")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (userId) {
+    // Get plans owned by this user or anonymous plans
+    query.or(`user_id.eq.${userId},user_id.eq.anonymous`);
+  } else {
+    // Only get anonymous plans if no user is logged in
+    query.eq("user_id", "anonymous");
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching user build plans:", error);
@@ -90,8 +119,26 @@ export async function getUserBuildPlans() {
   return data;
 }
 
-export async function deleteBuildPlan(id: string) {
-  const { error } = await supabase.from("build_plans").delete().eq("id", id);
+export async function deleteBuildPlan(id: string, userId?: string) {
+  // Get the current user ID from the session if not provided
+  if (!userId) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    userId = session?.user?.id;
+  }
+
+  // Only allow deletion if the user owns the plan or if it's an anonymous plan
+  const query = supabase.from("build_plans").delete();
+
+  if (userId) {
+    query.eq("id", id).or(`user_id.eq.${userId},user_id.eq.anonymous`);
+  } else {
+    // If no user is logged in, only allow deletion of anonymous plans
+    query.eq("id", id).eq("user_id", "anonymous");
+  }
+
+  const { error } = await query;
 
   if (error) {
     console.error(`Error deleting build plan ${id}:`, error);

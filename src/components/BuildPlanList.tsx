@@ -18,11 +18,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/lib/auth";
 
 interface BuildPlanListProps {
   onSelectPlan?: (planId: string) => void;
   onDeletePlan?: (planId: string) => void;
   onEditPlan?: (planId: string) => void;
+  userId?: string;
 }
 
 interface BuildPlanSummary {
@@ -38,6 +40,7 @@ const BuildPlanList = ({
   onSelectPlan = () => {},
   onDeletePlan = () => {},
   onEditPlan = () => {},
+  userId,
 }: BuildPlanListProps) => {
   const [plans, setPlans] = useState<BuildPlanSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,11 +49,13 @@ const BuildPlanList = ({
   const [planToDelete, setPlanToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const fetchPlans = async () => {
     setIsLoading(true);
     try {
-      const data = await getUserBuildPlans();
+      // Pass the user ID to get user-specific plans
+      const data = await getUserBuildPlans(userId || user?.id);
       setPlans(data as BuildPlanSummary[]);
       setError(null);
     } catch (err) {
@@ -63,7 +68,7 @@ const BuildPlanList = ({
 
   useEffect(() => {
     fetchPlans();
-  }, []);
+  }, [userId, user?.id]);
 
   const handleSelectPlan = async (planId: string) => {
     try {
@@ -97,7 +102,8 @@ const BuildPlanList = ({
 
     setIsDeleting(true);
     try {
-      const success = await deleteBuildPlan(planToDelete);
+      // Pass the user ID to ensure proper authorization
+      const success = await deleteBuildPlan(planToDelete, userId || user?.id);
       if (success) {
         // Remove from local state
         setPlans(plans.filter((plan) => plan.id !== planToDelete));

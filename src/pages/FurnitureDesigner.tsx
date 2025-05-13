@@ -11,9 +11,17 @@ import JoinerySelector from "@/components/JoinerySelector";
 import SaveDesignDialog from "@/components/SaveDesignDialog";
 import ShareDesignDialog from "@/components/ShareDesignDialog";
 import BuildPlanList from "@/components/BuildPlanList";
-import { getBuildPlan, saveBuildPlan } from "@/lib/database";
+import {
+  getBuildPlan,
+  saveBuildPlan,
+  getUserBuildPlans,
+  deleteBuildPlan,
+} from "@/lib/database";
 import { Button } from "@/components/ui/button";
 import { Save, Share2 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import AuthDialog from "@/components/AuthDialog";
+import UserMenu from "@/components/UserMenu";
 import {
   FurnitureDesignBrief,
   BuildPlan,
@@ -62,6 +70,7 @@ const FurnitureDesigner = () => {
     "assembled" | "exploded" | "animated"
   >("assembled");
   const [autoRotate, setAutoRotate] = useState(false);
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
     if (
@@ -234,7 +243,9 @@ const FurnitureDesigner = () => {
     <div className="container mx-auto p-4 h-full">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">AI Furniture Design Generator</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {!authLoading && !user && <AuthDialog />}
+          {!authLoading && user && <UserMenu />}
           <SaveDesignDialog
             onSave={(name, description) => {
               console.log("Saving design:", name, description);
@@ -557,12 +568,20 @@ const FurnitureDesigner = () => {
                   });
                 }
               }}
-              onDeletePlan={(planId) => {
-                // If the current plan is deleted, reset the state
-                if (currentBuildPlan?.id === planId) {
-                  setCurrentBuildPlan(null);
+              onDeletePlan={async (planId) => {
+                try {
+                  // Delete the plan with the current user ID
+                  const success = await deleteBuildPlan(planId, user?.id);
+
+                  // If the current plan is deleted, reset the state
+                  if (success && currentBuildPlan?.id === planId) {
+                    setCurrentBuildPlan(null);
+                  }
+                } catch (error) {
+                  console.error(`Error deleting plan ${planId}:`, error);
                 }
               }}
+              userId={user?.id}
             />
           </div>
         </TabsContent>
